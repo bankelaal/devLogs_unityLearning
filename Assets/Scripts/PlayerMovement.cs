@@ -5,27 +5,49 @@ using UnityEngine.UIElements;
 
 public class PlayerMovement : MonoBehaviour
 {
-  public  float       _playerSpeed = 3f;
-  public  float       _jumpForce = 8f;
-  public  float       _rotationSpeed = 5f;
-  public  bool        _useCameraRelativeMovement = false;
-  private float       _playerMovementDirect;
-  private bool        _isJumping;
+  // Base settings (kept for compatibility)
+  public float _playerSpeed = 3f;
+  // Jump impulse applied when player presses jump
+  public float _jumpForce = 8f;
+  // Rotation smoothing speed for Slerp in FixedUpdate
+  public float _rotationSpeed = 5f;
+  // If true, movement input is interpreted relative to the camera orientation
+  public bool _useCameraRelativeMovement = false;
+  // Running/walking configuration
+  // _walkSpeed and _runSpeed define the base speeds for walking and running
+  public float _walkSpeed = 2f;      // base walking speed (units/sec)
+  public float _runSpeed = 6f;       // top running speed (units/sec)
+  // Acceleration rate when increasing speed (units/sec^2)
+  public float _acceleration = 8f;   // how fast we accelerate to target speed
+  // Deceleration rate when input is released (large value for near-instant stop)
+  public float _deceleration = 80f;  // how fast we decelerate when input released (very quick)
+  // Key used to toggle running (inspector overrideable)
+  public KeyCode _runKey = KeyCode.LeftShift; // key to hold for running
+  // Internal current horizontal speed (units/sec)
+  private float _currentSpeed = 0f;   // current horizontal speed (units/sec)
+  // legacy/unused field kept for compatibility with earlier codepaths
+  private float _playerMovementDirect;
+  private bool _isJumping;
   private PlayerInput _playerInput;
-  private Rigidbody   _playerRigidBody;
-  private Quaternion  _targetRotation;
-  public  Vector3     _movementVelocity;
+  private Rigidbody _playerRigidBody;
+  private Quaternion _targetRotation;
+  // Desired horizontal movement velocity (world-space, units/sec). Set in Update, consumed in FixedUpdate.
+  public Vector3 _movementVelocity;
   private InputAction _playerMovement;
   private InputAction _playerJump;
-  public  GameObject  _camera;
-  private Vector3     _localNormal;
-  private bool        _isGrounded;
-  public  float       _groundCheckDistance = 0.6f;
-  public  float       _forwardGroundCheck = 0.6f;
-  public  float       _airControlAcceleration = 10f;
+  public GameObject _camera;
+  // Contact normal of the surface currently beneath the player (used to project movement on slopes)
+  private Vector3 _localNormal;
+  // Flag indicating whether player is currently standing on a surface
+  private bool _isGrounded;
+  // Raycast distances / air-control tuning
+  public float _groundCheckDistance = 0.6f;   // vertical distance to consider player grounded
+  public float _forwardGroundCheck = 0.6f;  // forward offset to test stepping down
+  public float _airControlAcceleration = 10f; // responsiveness of horizontal control while airborne
 
   void Start()
   {
+    // Initialize input and Rigidbody references
     _playerInput = new PlayerInput();
     _playerRigidBody = GetComponent<Rigidbody>();
     _playerMovement = _playerInput.FindAction("MovePlayer");
@@ -42,6 +64,7 @@ public class PlayerMovement : MonoBehaviour
     _localNormal = Vector3.up;
     _isGrounded = false;
     if (_playerRigidBody != null) {
+      // Improve visual smoothness by enabling Rigidbody interpolation
       _playerRigidBody.interpolation = RigidbodyInterpolation.Interpolate;
     }
   }
@@ -66,21 +89,26 @@ public class PlayerMovement : MonoBehaviour
 
     bool effectiveGrounded = _isGrounded || forwardGround;
 
+    // --- Grounded movement handling ---
     if (effectiveGrounded) {
       // If no input, stop immediately when grounded
       if (_movementVelocity.sqrMagnitude <= 0.000001f) {
+        // stop horizontal motion instantly
         Vector3 v = _playerRigidBody.linearVelocity;
-        v.x = 0f; v.z = 0f;
+        v.x = 0f;
+        v.z = 0f;
         _playerRigidBody.linearVelocity = v;
         // Snap player upright (world up) when stopped on ground
         Vector3 forwardHoriz = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
-        if (forwardHoriz.sqrMagnitude < 0.000001f) forwardHoriz = transform.forward;
+        if (forwardHoriz.sqrMagnitude < 0.000001f)
+          forwardHoriz = transform.forward;
         Quaternion upright = Quaternion.LookRotation(forwardHoriz.normalized, Vector3.up);
         _playerRigidBody.MoveRotation(upright);
         _targetRotation = upright;
       }
       else {
         // When grounded (or stepping down), set full movement velocity (allows moving down ramps)
+        // assign horizontal velocity directly (movementVelocity is in units/sec)
         _playerRigidBody.linearVelocity = _movementVelocity;
       }
     }
@@ -101,20 +129,17 @@ public class PlayerMovement : MonoBehaviour
     _movementVelocity = Vector3.zero;
   }
 
-    void Update()
+  void Update()
   {
     // Refresh grounding info each frame using a short downward ray to ensure immediate response
     if (_playerRigidBody != null) {
-      Debug.Log("histting Raycast :  ");
-      _groundCheckDistance = 0.8f;
+      _groundCheckDistance = 0.8f; // slight dynamic override for responsiveness
       RaycastHit hit;
       if (Physics.Raycast(_playerRigidBody.position + Vector3.up * 0.1f, Vector3.down, out hit, _groundCheckDistance)) {
-        Debug.Log("hit value is:  " + hit);
         _isGrounded = true;
-        _localNormal = hit.normal;
+        _localNormal = hit.normal; // store surface normal for slope projection
       }
       else {
-        Debug.Log("No hit happened");
         _isGrounded = false;
         _localNormal = Vector3.up;
       }
@@ -131,10 +156,24 @@ public class PlayerMovement : MonoBehaviour
       Vector3 intended = worldMove;
       if (_isGrounded) {
         Vector3 projected = Vector3.ProjectOnPlane(worldMove, _localNormal);
-        if (projected.sqrMagnitude > 0.000001f) intended = projected;
+        if (projected.sqrMagnitude > 0.000001f)
+          intended = projected;
       }
 
-      _movementVelocity = inputMag > 0.0001f ? intended.normalized * inputMag * _playerSpeed : Vector3.zero;
+      // Determine target speed based on running or walking
+      float targetBaseSpeed = Input.GetKey(_runKey) ? _runSpeed : _walkSpeed;
+      float targetSpeed = targetBaseSpeed * inputMag;
+      // Smoothly accelerate/decelerate current speed toward target
+      if (targetSpeed > _currentSpeed) {
+        _currentSpeed = Mathf.MoveTowards(_currentSpeed, targetSpeed, _acceleration * Time.deltaTime);
+      }
+      else {
+        // decelerate quickly (large deceleration yields near-instant stop)
+        _currentSpeed = Mathf.MoveTowards(_currentSpeed, targetSpeed, _deceleration * Time.deltaTime);
+      }
+
+      // Compute movement velocity in units/sec (will be applied in FixedUpdate)
+      _movementVelocity = _currentSpeed > 0.0001f ? intended.normalized * _currentSpeed : Vector3.zero;
       if (inputMag > 0.0001f && intended.sqrMagnitude > 0.000001f) {
         // Use ground-aligned forward when grounded so initial movement aligns with slope
         Vector3 forwardForRotation = intended.normalized;
@@ -143,7 +182,8 @@ public class PlayerMovement : MonoBehaviour
           // Align forward to the slope and use slope normal as up for the rotation
           forwardForRotation = Vector3.ProjectOnPlane(intended, _localNormal).normalized;
           upForRotation = _localNormal;
-          if (forwardForRotation.sqrMagnitude < 0.000001f) forwardForRotation = Vector3.ProjectOnPlane(transform.forward, _localNormal).normalized;
+          if (forwardForRotation.sqrMagnitude < 0.000001f)
+            forwardForRotation = Vector3.ProjectOnPlane(transform.forward, _localNormal).normalized;
         }
         Quaternion targetRotation = Quaternion.LookRotation(forwardForRotation, upForRotation);
         _targetRotation = targetRotation;
@@ -155,26 +195,28 @@ public class PlayerMovement : MonoBehaviour
     }
   }
 
-  private void OnCollisionEnter(Collision collision)
+  /*private void OnCollisionEnter(Collision collision)
   {
     if (collision.gameObject.CompareTag("Floor")) {
       _isJumping = false;
       _isGrounded = true;
       Vector3 avg = Vector3.zero;
-      foreach (ContactPoint c in collision.contacts) avg += c.normal;
+      foreach (ContactPoint c in collision.contacts)
+        avg += c.normal;
       _localNormal = avg == Vector3.zero ? Vector3.up : (avg / collision.contacts.Length).normalized;
     }
-  }
-  
-  private void OnCollisionStay(Collision collision)
+  }*/
+
+  /*private void OnCollisionStay(Collision collision)
   {
     if (collision.gameObject.CompareTag("Floor")) {
       Vector3 avg = Vector3.zero;
-      foreach (ContactPoint c in collision.contacts) avg += c.normal;
+      foreach (ContactPoint c in collision.contacts)
+        avg += c.normal;
       _localNormal = avg == Vector3.zero ? Vector3.up : (avg / collision.contacts.Length).normalized;
       _isGrounded = true;
     }
-  }
+  }*/
 
   private void OnCollisionExit(Collision collision)
   {
