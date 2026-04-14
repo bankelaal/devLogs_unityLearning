@@ -523,7 +523,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1804453913}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: d837a51045854c54fb6f1e073ed4630d, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -548,6 +548,10 @@ PrefabInstance:
     - target: {fileID: 518599885108309236, guid: adb0f2500906df54a8ce9d43ee188ea6, type: 3}
       propertyPath: m_LocalScale.x
       value: 28.304338
+      objectReference: {fileID: 0}
+    - target: {fileID: 518599885108309236, guid: adb0f2500906df54a8ce9d43ee188ea6, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 518599885108309236, guid: adb0f2500906df54a8ce9d43ee188ea6, type: 3}
       propertyPath: m_LocalPosition.x
@@ -593,6 +597,10 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: c583e9b587f79944b8f96f53cef146f2, type: 2}
+    - target: {fileID: 7812159155172332470, guid: adb0f2500906df54a8ce9d43ee188ea6, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 13400000, guid: d837a51045854c54fb6f1e073ed4630d, type: 2}
     - target: {fileID: 8038969947891559687, guid: adb0f2500906df54a8ce9d43ee188ea6, type: 3}
       propertyPath: m_Name
       value: Ramp
@@ -618,6 +626,10 @@ PrefabInstance:
       propertyPath: m_Enabled
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 868744814671027766, guid: 4783807c0dde3334c9b543846a0cc917, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 13400000, guid: d837a51045854c54fb6f1e073ed4630d, type: 2}
     - target: {fileID: 3871128065579391941, guid: 4783807c0dde3334c9b543846a0cc917, type: 3}
       propertyPath: m_LocalScale.x
       value: 50
@@ -875,6 +887,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2085869027004967520, guid: 6e63391548ead024d8fb13062b74efb7, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: 2085869027004967520, guid: 6e63391548ead024d8fb13062b74efb7, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.35
