@@ -23,20 +23,18 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Look",
+                    "type": "Value",
+                    "id": "d6f2d7ce-de6d-4cf3-8eef-71e0cf91eb71",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
                 }
             ],
             "bindings": [
-                {
-                    "name": "",
-                    "id": "eac480b9-d438-46fe-9df0-60aea014cefd",
-                    "path": "",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "MovePlayer",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
                 {
                     "name": "2D Vector",
                     "id": "19f5910b-1391-49f4-ab3b-e3678cdc0d6c",
@@ -102,6 +100,61 @@
                     "action": "JumpPlayer",
                     "isComposite": false,
                     "isPartOfComposite": false
+                },
+                {
+                    "name": "2D Vector",
+                    "id": "436be023-c73c-43e9-b79f-6b6ad08df469",
+                    "path": "2DVector",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Look",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "up",
+                    "id": "d931e181-1795-4872-bb67-6995db6f3228",
+                    "path": "<Mouse>/delta/up",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Look",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "down",
+                    "id": "fc68607c-3c80-4d99-b7fe-8aa1232b08b4",
+                    "path": "<Mouse>/delta/down",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Look",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "left",
+                    "id": "4cdc66fa-31bb-4a5e-b1ce-1786a817d17c",
+                    "path": "<Mouse>/delta/left",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Look",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "right",
+                    "id": "82e0ed47-1061-4b7c-b393-90aa791474bd",
+                    "path": "<Mouse>/delta/right",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Look",
+                    "isComposite": false,
+                    "isPartOfComposite": true
                 }
             ]
         }

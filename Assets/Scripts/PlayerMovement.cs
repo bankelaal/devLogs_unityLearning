@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using UnityEngine.UIElements;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -9,8 +8,6 @@ public class PlayerMovement : MonoBehaviour
   public float _playerSpeed = 3f;
   // Jump impulse applied when player presses jump
   public float _jumpForce = 8f;
-  // Rotation smoothing speed for Slerp in FixedUpdate
-  public float _rotationSpeed = 5f;
   // If true, movement input is interpreted relative to the camera orientation
   public bool _useCameraRelativeMovement = false;
   // Running/walking configuration
@@ -26,15 +23,36 @@ public class PlayerMovement : MonoBehaviour
   // Internal current horizontal speed (units/sec)
   private float _currentSpeed = 0f;   // current horizontal speed (units/sec)
   // legacy/unused field kept for compatibility with earlier codepaths
-  private float _playerMovementDirect;
   private bool _isJumping;
   private PlayerInput _playerInput;
   private Rigidbody _playerRigidBody;
   private Quaternion _targetRotation;
   // Desired horizontal movement velocity (world-space, units/sec). Set in Update, consumed in FixedUpdate.
   public Vector3 _movementVelocity;
+
+  // Rotation smoothing speed for Slerp in FixedUpdate
+  public float _rotationSpeed = 0.5f;
+  private float _targetRotationAngle = 0f;
+  private Vector2 _lookInput;
+
+  // Mouse rotation settings
+  // If true, use mouse input for player rotation; if false, rotation follows movement direction
+  public bool _useMouseRotation = true;
+  // Mouse sensitivity for rotation (lower = less responsive, higher = more responsive)
+  public float _mouseSensitivity = 2f;
+  // Vertical mouse sensitivity (separate control for up/down look)
+  public float _verticalMouseSensitivity = 2f;
+  // Current accumulated yaw (horizontal rotation) in degrees
+  private float _currentYaw = 0f;
+  // Current accumulated pitch (vertical rotation) in degrees
+  private float _currentPitch = 0f;
+  // Clamp vertical look to prevent over-rotation
+  public float _verticalLookLimit = 90f;  // degrees from horizontal
+
   private InputAction _playerMovement;
   private InputAction _playerJump;
+  private InputAction _playerlook;
+
   public GameObject _camera;
   // Contact normal of the surface currently beneath the player (used to project movement on slopes)
   private Vector3 _localNormal;
@@ -45,6 +63,11 @@ public class PlayerMovement : MonoBehaviour
   public float _forwardGroundCheck = 0.6f;  // forward offset to test stepping down
   public float _airControlAcceleration = 10f; // responsiveness of horizontal control while airborne
 
+  public void OnLook(InputAction.CallbackContext context)
+  {
+    _lookInput = context.ReadValue<Vector2>();
+  }
+
   void Start()
   {
     // Initialize input and Rigidbody references
@@ -54,10 +77,17 @@ public class PlayerMovement : MonoBehaviour
     if (_playerMovement != null) {
       _playerMovement.Enable();
     }
+
     _playerJump = _playerInput.FindAction("JumpPlayer");
     if (_playerJump != null) {
       _playerJump.Enable();
     }
+
+    _playerlook = _playerInput.FindAction("Look");
+    if (_playerlook != null) {
+      _playerlook.Enable();
+    }
+
     _isJumping = false;
     _targetRotation = transform.rotation;
     _movementVelocity = Vector3.zero;
@@ -67,14 +97,24 @@ public class PlayerMovement : MonoBehaviour
       // Improve visual smoothness by enabling Rigidbody interpolation
       _playerRigidBody.interpolation = RigidbodyInterpolation.Interpolate;
     }
+
+    // Hide the cursor since we aren't using it for pointing
+    if (_useMouseRotation) {
+      Cursor.lockState = CursorLockMode.Locked;
+      Cursor.visible = false;
+    }
+
+    // Initialize rotation angles from current transform
+    Vector3 startEuler = transform.eulerAngles;
+    _currentYaw = startEuler.y;
+    _currentPitch = startEuler.x;
+    _targetRotationAngle = startEuler.y;
+    _targetRotation = transform.rotation;
   }
 
   // FixedUpdate is called on the physics timestep. Apply smoothed rotation here for Rigidbody.
   void FixedUpdate()
   {
-    Debug.Log("FixedUpdate::Current velocity:  " + _currentSpeed);
-    Debug.Log("FixedUpdate::movement velocity:  " + _movementVelocity);
-    Debug.Log("FixedUpdate::linearVelocity:  " + _playerRigidBody.linearVelocity);
     if (_playerRigidBody == null) {
       return;
     }
@@ -101,7 +141,6 @@ public class PlayerMovement : MonoBehaviour
         v.x = 0f;
         v.z = 0f;
         _playerRigidBody.linearVelocity = v;
-        Debug.Log("velocity is:  " + _playerRigidBody.linearVelocity);
         // Snap player upright (world up) when stopped on ground
         Vector3 forwardHoriz = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
         if (forwardHoriz.sqrMagnitude < 0.000001f)
@@ -112,13 +151,11 @@ public class PlayerMovement : MonoBehaviour
       }
       else {
         // When grounded (or stepping down), set full movement velocity (allows moving down ramps)
-        // assign horizontal velocity directly (movementVelocity is in units/sec)
         _playerRigidBody.linearVelocity = _movementVelocity;
       }
     }
     else {
       if (_movementVelocity.sqrMagnitude > 0.000001f) {
-        Debug.Log("movement sqrt value is: " + _movementVelocity.sqrMagnitude);
         // In air: apply horizontal acceleration so gravity is not canceled
         Vector3 currentHorizontal = new Vector3(_playerRigidBody.linearVelocity.x, 0f, _playerRigidBody.linearVelocity.z);
         Vector3 desiredHorizontal = new Vector3(_movementVelocity.x, 0f, _movementVelocity.z);
@@ -127,11 +164,10 @@ public class PlayerMovement : MonoBehaviour
       }
     }
 
-    if (_movementVelocity.sqrMagnitude > 0.000001f &&
-        Quaternion.Angle(_playerRigidBody.rotation, _targetRotation) > 0.01f) {
+    // Apply smooth rotation toward target
+    if (Quaternion.Angle(_playerRigidBody.rotation, _targetRotation) > 0.01f) {
       Quaternion smooth = Quaternion.Slerp(_playerRigidBody.rotation, _targetRotation, _rotationSpeed * Time.fixedDeltaTime);
       _playerRigidBody.MoveRotation(smooth);
-      Debug.Log("Smooth value is: " + smooth);
     }
     _movementVelocity = Vector3.zero;
   }
@@ -152,11 +188,8 @@ public class PlayerMovement : MonoBehaviour
       }
     }
 
-    // Calculating rotation and velocity outside the IsPressed guard
-    // It's so that we can update the currentSpeed when IsPresses is false
-    // else it'll always have a velocity attached to it
+    // Read movement input (keyboard WASD)
     Vector2 playerMoveVec = _playerMovement.ReadValue<Vector2>();
-    // Player Rotation
     Vector3 move = new Vector3(playerMoveVec.x, 0f, playerMoveVec.y);
     Vector3 worldMove = (_useCameraRelativeMovement && _camera != null)
                         ? Vector3.ProjectOnPlane(_camera.transform.TransformDirection(move), Vector3.up)
@@ -171,10 +204,11 @@ public class PlayerMovement : MonoBehaviour
     }
 
     // Determine target speed based on running or walking
-    //Enable only run speed rught now,
-    float targetBaseSpeed = _runSpeed;// Input.GetKey(_runKey) ? _runSpeed : _walkSpeed;
-
+    // For faster testing only use run Speed, change it later
+    float targetBaseSpeed = _runSpeed;
+    //float targetBaseSpeed = Input.GetKey(_runKey) ? _runSpeed : _walkSpeed;
     float targetSpeed = targetBaseSpeed * inputMag;
+
     // Smoothly accelerate/decelerate current speed toward target
     if (targetSpeed > _currentSpeed) {
       _currentSpeed = Mathf.MoveTowards(_currentSpeed, targetSpeed, _acceleration * Time.deltaTime);
@@ -187,6 +221,7 @@ public class PlayerMovement : MonoBehaviour
         _currentSpeed = 0f;
       }
     }
+
     // Compute movement velocity in units/sec (will be applied in FixedUpdate)
     // Only compute if currentSpeed is meaningful to avoid issues with normalizing near-zero vectors
     if (_currentSpeed > 0.0001f && intended.sqrMagnitude > 0.000001f) {
@@ -196,29 +231,55 @@ public class PlayerMovement : MonoBehaviour
       _movementVelocity = Vector3.zero;
     }
 
-    /*
-     * Calculation of the movement velocity ends here
-     */
-
-    if (_playerMovement.IsPressed()) {
-      if (inputMag > 0.0001f && intended.sqrMagnitude > 0.000001f) {
-        // Use ground-aligned forward when grounded so initial movement aligns with slope
-        Vector3 forwardForRotation = intended.normalized;
-        Vector3 upForRotation = Vector3.up;
-        if (_isGrounded) {
-          // Align forward to the slope and use slope normal as up for the rotation
-          forwardForRotation = Vector3.ProjectOnPlane(intended, _localNormal).normalized;
-          upForRotation = _localNormal;
-          if (forwardForRotation.sqrMagnitude < 0.000001f)
-            forwardForRotation = Vector3.ProjectOnPlane(transform.forward, _localNormal).normalized;
-        }
-        Quaternion targetRotation = Quaternion.LookRotation(forwardForRotation, upForRotation);
-        _targetRotation = targetRotation;
-      }
+    // Handle rotation based on mode
+    if (_useMouseRotation) {
+      // Mouse rotation mode: use mouse delta to control player rotation directly
+      HandleMouseRotation();
     }
+    else {
+      // Movement rotation mode: player rotates based on movement direction (original behavior)
+      HandleMovementRotation(intended, inputMag);
+    }
+
+    // Handle jumping
     if (_playerJump.IsPressed() && !_isJumping) {
       _playerRigidBody.AddForce(Vector3.up * _jumpForce, ForceMode.Impulse);
       _isJumping = true;
+    }
+  }
+
+  // Handle rotation when using mouse input
+  private void HandleMouseRotation()
+  {
+    // Accumulate mouse input into yaw and pitch angles
+    _currentYaw += _lookInput.x * _mouseSensitivity;
+    _currentPitch -= _lookInput.y * _verticalMouseSensitivity;  // Negative because Y is typically inverted in games
+
+    // Clamp vertical look to prevent over-rotation (flipping upside down)
+    _currentPitch = Mathf.Clamp(_currentPitch, -_verticalLookLimit, _verticalLookLimit);
+
+    // Build the target rotation from accumulated yaw and pitch
+    Quaternion xRotation = Quaternion.AngleAxis(_currentPitch, Vector3.right);
+    Quaternion yRotation = Quaternion.AngleAxis(_currentYaw, Vector3.up);
+    _targetRotation = yRotation * xRotation;
+  }
+
+  // Handle rotation when player rotates based on movement direction
+  private void HandleMovementRotation(Vector3 intended, float inputMag)
+  {
+    if (inputMag > 0.0001f && intended.sqrMagnitude > 0.000001f) {
+      // Use ground-aligned forward when grounded so initial movement aligns with slope
+      Vector3 forwardForRotation = intended.normalized;
+      Vector3 upForRotation = Vector3.up;
+      if (_isGrounded) {
+        // Align forward to the slope and use slope normal as up for the rotation
+        forwardForRotation = Vector3.ProjectOnPlane(intended, _localNormal).normalized;
+        upForRotation = _localNormal;
+        if (forwardForRotation.sqrMagnitude < 0.000001f)
+          forwardForRotation = Vector3.ProjectOnPlane(transform.forward, _localNormal).normalized;
+      }
+      Quaternion targetRotation = Quaternion.LookRotation(forwardForRotation, upForRotation);
+      _targetRotation = targetRotation;
     }
   }
 
